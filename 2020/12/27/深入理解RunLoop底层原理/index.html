@@ -6,15 +6,17 @@
   <meta name="renderer" content="webkit">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" >
   <link rel="dns-prefetch" href="http://yoursite.com">
-  <title>Archives | HJQ 的博客</title>
+  <title>深入理解RunLoop底层原理 | HJQ 的博客</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="哈哈哈哈哈哈哈哈哈哈哈">
-<meta property="og:type" content="website">
-<meta property="og:title" content="HJQ 的博客">
-<meta property="og:url" content="http://yoursite.com/archives/index.html">
+  <meta name="description" content="-– title: 深入理解RunLoop底层原理 date: 2020-12-30 21:30:36 categories: 默认分类 tags: [iOS, C, C++, CoreFudation]  updated: 2020-05-17 21:30:36 description: 附加一段文章摘要，字数最好在140字以内，会出现在meta的description里面 -– 深入理解Run">
+<meta property="og:type" content="article">
+<meta property="og:title" content="深入理解RunLoop底层原理">
+<meta property="og:url" content="http://yoursite.com/2020/12/27/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3RunLoop%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/index.html">
 <meta property="og:site_name" content="HJQ 的博客">
-<meta property="og:description" content="哈哈哈哈哈哈哈哈哈哈哈">
+<meta property="og:description" content="-– title: 深入理解RunLoop底层原理 date: 2020-12-30 21:30:36 categories: 默认分类 tags: [iOS, C, C++, CoreFudation]  updated: 2020-05-17 21:30:36 description: 附加一段文章摘要，字数最好在140字以内，会出现在meta的description里面 -– 深入理解Run">
 <meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2020-12-26T16:42:55.645Z">
+<meta property="article:modified_time" content="2020-12-27T07:04:45.130Z">
 <meta property="article:author" content="HJQ">
 <meta name="twitter:card" content="summary">
   
@@ -148,160 +150,215 @@
             <canvas data-colors="#eaeaea" data-sectionHeight="100" data-contentId="js-content" id="myCanvas1" class="anm-canvas"></canvas>
           </div>
           <div id="js-content" class="content-ll">
-            
+            <article id="post-深入理解RunLoop底层原理" class="article article-type-post " itemscope itemprop="blogPost">
+  <div class="article-inner">
+    
+      <header class="article-header">
+        
   
+    <h1 class="article-title" itemprop="name">
+      深入理解RunLoop底层原理
+    </h1>
   
-    
-    
-      
-      
-      <section class="archives-wrap">
-        <div class="archive-year-wrap">
-          <a href="/archives/2020" class="archive-year">2020</a>
-        </div>
-        <div class="archives">
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2020/12/27/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3RunLoop%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/" class="archive-article-date">
+
+        
+        <a href="/2020/12/27/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3RunLoop%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/" class="archive-article-date">
   	<time datetime="2020-12-26T16:42:55.645Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2020-12-27</time>
 </a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2020/12/27/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3RunLoop%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/">深入理解RunLoop底层原理</a>
-    </h1>
-  
+        
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>-–</p>
+<p>title: 深入理解RunLoop底层原理</p>
+<p>date: 2020-12-30 21:30:36</p>
+<p>categories: 默认分类</p>
+<p>tags: [iOS, C, C++, CoreFudation] </p>
+<p>updated: 2020-05-17 21:30:36</p>
+<p>description: 附加一段文章摘要，字数最好在140字以内，会出现在meta的description里面</p>
+<p>-–</p>
+<h1 id="深入理解RunLoop底层原理"><a href="#深入理解RunLoop底层原理" class="headerlink" title="深入理解RunLoop底层原理"></a>深入理解RunLoop底层原理</h1><h3 id="RunLoop-简介"><a href="#RunLoop-简介" class="headerlink" title="RunLoop 简介"></a>RunLoop 简介</h3><p>4K是 4096个字节 Linux 的一页是 4K，iOS 的的一页是 16K</p>
+<p>Source 是RunLoop的数据源抽象类（protocol）</p>
+<p>RunLoop定义了两个version的Source:</p>
+<ul>
+<li>Source0: 处理APP内部事件、App 自己负责管理（手动触发），如UIEvent、CFSocket</li>
+<li>Source1: 由RunLoop和内核管理，Mach port 驱动，如CFMachPort、CFMessagePort</li>
+</ul>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">Fundation&#x2F;NSThread.h</span><br><span class="line"></span><br><span class="line">@interface NSObject (NSThreadPerformAdditions)</span><br><span class="line"></span><br><span class="line">- (void)performSelectorOnMainThread:(SEL)aSelector withObject:(nullable id)arg waitUntilDone:(BOOL)wait modes:(nullable NSArray&lt;NSString *&gt; *)array;</span><br><span class="line">- (void)performSelectorOnMainThread:(SEL)aSelector withObject:(nullable id)arg waitUntilDone:(BOOL)wait;</span><br><span class="line">	&#x2F;&#x2F; equivalent to the first method with kCFRunLoopCommonModes</span><br><span class="line"></span><br><span class="line">- (void)performSelector:(SEL)aSelector onThread:(NSThread *)thr withObject:(nullable id)arg waitUntilDone:(BOOL)wait modes:(nullable NSArray&lt;NSString *&gt; *)array API_AVAILABLE(macos(10.5), ios(2.0), watchos(2.0), tvos(9.0));</span><br><span class="line">- (void)performSelector:(SEL)aSelector onThread:(NSThread *)thr withObject:(nullable id)arg waitUntilDone:(BOOL)wait API_AVAILABLE(macos(10.5), ios(2.0), watchos(2.0), tvos(9.0));</span><br><span class="line">	&#x2F;&#x2F; equivalent to the first method with kCFRunLoopCommonModes</span><br><span class="line">- (void)performSelectorInBackground:(SEL)aSelector withObject:(nullable id)arg API_AVAILABLE(macos(10.5), ios(2.0), watchos(2.0), tvos(9.0));</span><br><span class="line"></span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
 
-        <div class="article-info info-on-right">
-          
-          
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">Fundation&#x2F;NSRunLoop.h</span><br><span class="line"></span><br><span class="line">@interface NSObject (NSDelayedPerforming)</span><br><span class="line"></span><br><span class="line">- (void)performSelector:(SEL)aSelector withObject:(nullable id)anArgument afterDelay:(NSTimeInterval)delay inModes:(NSArray&lt;NSRunLoopMode&gt; *)modes;</span><br><span class="line">- (void)performSelector:(SEL)aSelector withObject:(nullable id)anArgument afterDelay:(NSTimeInterval)delay;</span><br><span class="line">+ (void)cancelPreviousPerformRequestsWithTarget:(id)aTarget selector:(SEL)aSelector object:(nullable id)anArgument;</span><br><span class="line">+ (void)cancelPreviousPerformRequestsWithTarget:(id)aTarget;</span><br><span class="line"></span><br><span class="line">@end</span><br><span class="line"></span><br><span class="line">@interface NSRunLoop (NSOrderedPerform)</span><br><span class="line"></span><br><span class="line">- (void)performSelector:(SEL)aSelector target:(id)target argument:(nullable id)arg order:(NSUInteger)order modes:(NSArray&lt;NSRunLoopMode&gt; *)modes;</span><br><span class="line">- (void)cancelPerformSelector:(SEL)aSelector target:(id)target argument:(nullable id)arg;</span><br><span class="line">- (void)cancelPerformSelectorsWithTarget:(id)target;</span><br><span class="line"></span><br><span class="line">@end</span><br></pre></td></tr></table></figure>
 
+<h3 id="RunLoop-的原理"><a href="#RunLoop-的原理" class="headerlink" title="RunLoop 的原理"></a>RunLoop 的原理</h3><h3 id="RunLoop"><a href="#RunLoop" class="headerlink" title="RunLoop"></a>RunLoop</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 源码有作精简</span></span><br><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">CFRunLoop</span> &#123;</span></span><br><span class="line">    CFRuntimeBase _base;</span><br><span class="line">    <span class="keyword">pthread_mutex_t</span> _lock;          <span class="comment">/* locked for accessing mode list */</span></span><br><span class="line">    __CFPort _wakeUpPort;           <span class="comment">// used for CFRunLoopWakeUp </span></span><br><span class="line">    Boolean _unused;</span><br><span class="line">    <span class="keyword">volatile</span> _per_run_data *_perRunData;              <span class="comment">// reset for runs of the run loop</span></span><br><span class="line">    <span class="keyword">pthread_t</span> _pthread;								<span class="comment">// 一个runloop对应一个线程</span></span><br><span class="line">    CFMutableSetRef _commonModes;	  	<span class="comment">// 通用Modes</span></span><br><span class="line">    CFMutableSetRef _commonModeItems;	<span class="comment">// 通用Mode 里的 Items</span></span><br><span class="line">    CFRunLoopModeRef _currentMode;		<span class="comment">// 当前的所在的 Mode</span></span><br><span class="line">    CFMutableSetRef _modes;						<span class="comment">// runloop 中包含的 modes (默认有kCFRunLoopDefaultMode)</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> _<span class="title">block_item</span> *_<span class="title">blocks_head</span>;</span>	<span class="comment">// block 链表的头指针</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> _<span class="title">block_item</span> *_<span class="title">blocks_tail</span>;</span> <span class="comment">// block 链表的尾指针</span></span><br><span class="line">    CFAbsoluteTime _runTime;</span><br><span class="line">    CFAbsoluteTime _sleepTime;</span><br><span class="line">    CFTypeRef _counterpart;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Mode"><a href="#Mode" class="headerlink" title="Mode"></a>Mode</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">CFRunLoopMode</span> &#123;</span></span><br><span class="line">    CFRuntimeBase _base;</span><br><span class="line">    <span class="keyword">pthread_mutex_t</span> _lock;  <span class="comment">/* must have the run loop locked before locking this */</span></span><br><span class="line">    CFStringRef _name;						<span class="comment">// mode 的名称</span></span><br><span class="line">    Boolean _stopped;							<span class="comment">// 状态是否停止</span></span><br><span class="line">    <span class="keyword">char</span> _padding[<span class="number">3</span>];</span><br><span class="line">    CFMutableSetRef _sources0;		<span class="comment">// 存放 source0 	</span></span><br><span class="line">    CFMutableSetRef _sources1;		<span class="comment">// 存放 source1</span></span><br><span class="line">    CFMutableArrayRef _observers;	<span class="comment">// 存放 observer</span></span><br><span class="line">    CFMutableArrayRef _timers;		<span class="comment">// 存放 timer</span></span><br><span class="line">    CFMutableDictionaryRef _portToV1SourceMap;</span><br><span class="line">    __CFPortSet _portSet;					<span class="comment">// 存放 port</span></span><br><span class="line">    CFIndex _observerMask;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> USE_DISPATCH_SOURCE_FOR_TIMERS</span></span><br><span class="line">    <span class="keyword">dispatch_source_t</span> _timerSource;</span><br><span class="line">    <span class="keyword">dispatch_queue_t</span> _queue;</span><br><span class="line">    Boolean _timerFired; <span class="comment">// set to true by the source when a timer has fired</span></span><br><span class="line">    Boolean _dispatchTimerArmed;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">if</span> USE_MK_TIMER_TOO</span></span><br><span class="line">    <span class="keyword">mach_port_t</span> _timerPort;</span><br><span class="line">    Boolean _mkTimerArmed;</span><br><span class="line"><span class="meta">#<span class="meta-keyword">endif</span></span></span><br><span class="line">    <span class="keyword">uint64_t</span> _timerSoftDeadline; <span class="comment">/* TSR */</span></span><br><span class="line">    <span class="keyword">uint64_t</span> _timerHardDeadline; <span class="comment">/* TSR */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+
+
+<ol>
+<li>commonMode</li>
+<li>currentMode</li>
+<li></li>
+</ol>
+<h3 id="Observer"><a href="#Observer" class="headerlink" title="Observer"></a>Observer</h3><h3 id="Timer"><a href="#Timer" class="headerlink" title="Timer"></a>Timer</h3><pre><code>1. mk_timer
+ 2. dispatch_source_timer</code></pre><h3 id="Source"><a href="#Source" class="headerlink" title="Source"></a>Source</h3><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> __<span class="title">CFRunLoopSource</span> &#123;</span></span><br><span class="line">    CFRuntimeBase _base;</span><br><span class="line">    <span class="keyword">uint32_t</span> _bits;</span><br><span class="line">    <span class="keyword">pthread_mutex_t</span> _lock;</span><br><span class="line">    CFIndex _order;         <span class="comment">/* immutable */</span> <span class="comment">// 优先级</span></span><br><span class="line">    CFMutableBagRef _runLoops;							<span class="comment">// </span></span><br><span class="line">    <span class="keyword">union</span> &#123;<span class="comment">// 共用体 source0、source1</span></span><br><span class="line">        CFRunLoopSourceContext version0;    <span class="comment">/* immutable, except invalidation */</span></span><br><span class="line">        CFRunLoopSourceContext1 version1;   <span class="comment">/* immutable, except invalidation */</span></span><br><span class="line">    &#125; _context;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+
+
+<pre><code>1. source1
+ 2. source2</code></pre><h3 id="CFRunLoop-源代码解析："><a href="#CFRunLoop-源代码解析：" class="headerlink" title="CFRunLoop 源代码解析："></a>CFRunLoop 源代码解析：</h3><blockquote>
+<p>以下是对 CFRunLoop 的源代码进行的解析，并按照源码的顺序，汇总了比较重要的一些函数，注释中描述了函数的作用和内部的实现，具体函数的实现代码可以参考源码。</p>
+</blockquote>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 在 runloop 中通过 modeName 来查找对应的 runloopMode，Boolean create 参数如果为true，表示是否创建，如果没有查到会创建一个 model，添加到 runloop 的 modes 中，model 默认初始化 _portSet 变量, 然后用mk_timer_create()创建 _timerPort，添加到 _portSet 中</span></span><br><span class="line"><span class="keyword">static</span> CFRunLoopModeRef __CFRunLoopFindMode(CFRunLoopRef rl, CFStringRef modeName, Boolean create);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 判断 runloop 中的 runloopModel 是否为nil</span></span><br><span class="line"><span class="keyword">static</span> Boolean __CFRunLoopModeIsEmpty(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFRunLoopModeRef previousMode);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 通过传入的线程 t 来创建 runloop，runloop 中默认会把 kCFRunLoopDefaultMode 加入到 _commonModes，同时会 runloop 的 modes 默认加入 kCFRunLoopDefaultMode</span></span><br><span class="line"><span class="keyword">static</span> CFRunLoopRef __CFRunLoopCreate(<span class="keyword">pthread_t</span> t);</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * should only be called by Foundation</span></span><br><span class="line"><span class="comment"> * 通过传入的线程 t 获取对应的 runloop，如果传入的线程 t 为 NULL，默认获取主线程的 runloop</span></span><br><span class="line"><span class="comment"> * </span></span><br><span class="line"><span class="comment"> * _CFRunLoopGet0 函数中，如果 __CFRunLoops 字典为NULL，默认会创建主线程 runloop 并加入到字典中，</span></span><br><span class="line"><span class="comment"> * 如果传入的其他线程，__CFRunLoops 字典中没有对应的 runloop，会创建一个 runloop，添加到字典中</span></span><br><span class="line"><span class="comment"> * _CFRunLoopGet0b 只是获取 runloop，获取不到直接返回 NULL，不会去创建</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line">CF_EXPORT CFRunLoopRef _CFRunLoopGet0(<span class="keyword">pthread_t</span> t);</span><br><span class="line">CFRunLoopRef _CFRunLoopGet0b(<span class="keyword">pthread_t</span> t);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 移除所有的 source</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopRemoveAllSources(CFRunLoopRef rl, CFStringRef modeName);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 在每个线程退出时调用(移除__CFRunLoops中当前线程对应的 runloop，清空 runloop中的 _counterpart，移除所有 model 中的 sources，移除 commonModes )</span></span><br><span class="line">CF_PRIVATE <span class="keyword">void</span> __CFFinalizeRunLoop(<span class="keyword">uintptr_t</span> data);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 获取 runloop 中的 _pthread</span></span><br><span class="line"><span class="keyword">pthread_t</span> _CFRunLoopGet1(CFRunLoopRef rl);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// should only be called by Foundation</span></span><br><span class="line"><span class="comment">/// 获取 runloop 中的 _counterpart ，两个函数的区别是_CFRunLoopGet2 通过加锁线程安全, _CFRunLoopGet2 是直接获取</span></span><br><span class="line">CF_EXPORT CFTypeRef _CFRunLoopGet2(CFRunLoopRef rl);</span><br><span class="line">CF_EXPORT CFTypeRef _CFRunLoopGet2b(CFRunLoopRef rl);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 获取 main runloop ，如果为 NULL 则会通过 _CFRunLoopGet0(pthread_main_thread_np()) 去创建</span></span><br><span class="line"><span class="function">CFRunLoopRef <span class="title">CFRunLoopGetMain</span><span class="params">(<span class="keyword">void</span>)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// _CFGetTSD(__CFTSDKeyRunLoop); 这个是啥意思。。。疑问？？？？？</span></span><br><span class="line"><span class="comment">/// 获取当前线程的 runloop ，如果为 NULL 则会通过 _CFRunLoopGet0(pthread_self()) 去创建， pthread_self() 是获取当前线程</span></span><br><span class="line"><span class="function">CFRunLoopRef <span class="title">CFRunLoopGetCurrent</span><span class="params">(<span class="keyword">void</span>)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 获取 当前 runloop 的 _currentMode 的 name</span></span><br><span class="line"><span class="function">CFStringRef <span class="title">CFRunLoopCopyCurrentMode</span><span class="params">(CFRunLoopRef rl)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 把 rlm(value) 的 name 添加到数组(context)中</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopGetModeName(<span class="keyword">const</span> <span class="keyword">void</span> *value, <span class="keyword">void</span> *context);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 获取 runloop 中所有的 mode</span></span><br><span class="line"><span class="function">CFArrayRef <span class="title">CFRunLoopCopyAllModes</span><span class="params">(CFRunLoopRef rl)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 添加 item 到 runloop 的 commonMode，根据 item 类型调用不同的方法</span></span><br><span class="line"><span class="comment">/// source: CFRunLoopAddSource(rl, (CFRunLoopSourceRef)item, modeName);</span></span><br><span class="line"><span class="comment">/// observer: CFRunLoopAddObserver(rl, (CFRunLoopObserverRef)item, modeName);</span></span><br><span class="line"><span class="comment">/// timer: CFRunLoopAddTimer(rl, (CFRunLoopTimerRef)item, modeName);</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopAddItemsToCommonMode(<span class="keyword">const</span> <span class="keyword">void</span> *value, <span class="keyword">void</span> *ctx);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 同上 只是 value 和 ctx 的值不同</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopAddItemToCommonModes(<span class="keyword">const</span> <span class="keyword">void</span> *value, <span class="keyword">void</span> *ctx);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 移除 runloop mode 中的 item，根据 item 类型调用不同的方法</span></span><br><span class="line"><span class="comment">/// source: CFRunLoopRemoveSource(rl, (CFRunLoopSourceRef)item, modeName);</span></span><br><span class="line"><span class="comment">/// observer: CFRunLoopRemoveObserver(rl, (CFRunLoopObserverRef)item, modeName);</span></span><br><span class="line"><span class="comment">/// timer: CFRunLoopRemoveTimer(rl, (CFRunLoopTimerRef)item, modeName);</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopRemoveItemFromCommonModes(<span class="keyword">const</span> <span class="keyword">void</span> *value, <span class="keyword">void</span> *ctx);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 判断 runloop 中的 _commonModes 是否包含指定的 modeName</span></span><br><span class="line">CF_EXPORT Boolean _CFRunLoop01(CFRunLoopRef rl, CFStringRef modeName);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 如果 runloop 中的 _commonModes 不包含指定的 modeName，就添加 modeName 到 _commonModes，然后将所有 common-modes 中的 items 添加到新 mode</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">CFRunLoopAddCommonMode</span><span class="params">(CFRunLoopRef rl, CFStringRef modeName)</span></span>;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_TIMER_CALLBACK_FUNCTION__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// 该方法调用 _dispatch_main_queue_callback_4CF(msg) 主队列回调</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__(<span class="keyword">void</span> *msg);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// call_out Observer 回调 func(observer, activity, info);</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_CALLING_OUT_TO_AN_OBSERVER_CALLBACK_FUNCTION__(CFRunLoopObserverCallBack func, CFRunLoopObserverRef observer, CFRunLoopActivity activity, <span class="keyword">void</span> *info);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// call_out Timer 回调 func(timer, info);</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_CALLING_OUT_TO_A_TIMER_CALLBACK_FUNCTION__(CFRunLoopTimerCallBack func, CFRunLoopTimerRef timer, <span class="keyword">void</span> *info);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// call_out Block 回调</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__(<span class="keyword">void</span> (^block)(<span class="keyword">void</span>));</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/// 执行 runloop 中的 _block_item，runloop 中用链表存储 _block_item，所以有一个头指针 _blocks_head，和一个尾指针 _blocks_tail，会遍历链表，如果 _block_item-&gt;_mode，跟传入的 rlm 是相同的，或者 _block_item-&gt;_mode 跟 kCFRunLoopCommonModes 相同，且传入 rlm 包含在 commonModes 里，然后通过 __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__(block) 执行 _block_item 里的 block，如果不相同则会通过pre指针把不相同的节点再次连成一个链表，相当于是过滤掉要执行的 blok，如果遍历完，会对 runloop 的 _blocks_head、_blocks_tail 重新赋值。</span></span><br><span class="line"><span class="keyword">static</span> Boolean __CFRunLoopDoBlocks(CFRunLoopRef rl, CFRunLoopModeRef rlm);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 遍历 runloopMode 的 Observers 给观察者回调</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopDoObservers(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFRunLoopActivity activity);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/// 比较两个 source-&gt;_order 的优先级</span></span><br><span class="line"><span class="keyword">static</span> CFComparisonResult __CFRunLoopSourceComparator(<span class="keyword">const</span> <span class="keyword">void</span> *val1, <span class="keyword">const</span> <span class="keyword">void</span> *val2, <span class="keyword">void</span> *context);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__</span></span><br><span class="line"><span class="comment">/// __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// call_out Source0 回调</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__(<span class="keyword">void</span> (*perform)(<span class="keyword">void</span> *), <span class="keyword">void</span> *info);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// call_out Source1 回调</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE1_PERFORM_FUNCTION__(<span class="keyword">void</span> (*perform)(<span class="keyword">void</span> *), <span class="keyword">void</span> *info);</span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">void</span> __CFRunLoopCollectSources0(<span class="keyword">const</span> <span class="keyword">void</span> *value, <span class="keyword">void</span> *context);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">static</span> Boolean __CFRunLoopDoSources0(CFRunLoopRef rl, CFRunLoopModeRef rlm, Boolean stopAfterHandle);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment">/// runloop 是否结束（如果 runloop 里的 model 为 NULL 结束）</span></span><br><span class="line">CF_EXPORT Boolean _CFRunLoopFinished(CFRunLoopRef rl, CFStringRef modeName);</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 运行 runloop</span></span><br><span class="line"><span class="keyword">static</span> <span class="keyword">int32_t</span> __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInterval seconds, Boolean stopAfterHandle, CFRunLoopModeRef previousMode) __attribute__((noinline));</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="RunLoop-的应用"><a href="#RunLoop-的应用" class="headerlink" title="RunLoop 的应用"></a>RunLoop 的应用</h3><ul>
+<li><h4 id="线程保活"><a href="#线程保活" class="headerlink" title="线程保活"></a>线程保活</h4></li>
+<li><h4 id="检测界面卡顿"><a href="#检测界面卡顿" class="headerlink" title="检测界面卡顿"></a>检测界面卡顿</h4></li>
+<li><h4 id="性能优化"><a href="#性能优化" class="headerlink" title="性能优化"></a>性能优化</h4></li>
+<li><h4 id="让Crash的程序起死回生"><a href="#让Crash的程序起死回生" class="headerlink" title="让Crash的程序起死回生"></a>让Crash的程序起死回生</h4></li>
+</ul>
+<h4 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h4><ul>
+<li>CoreFundation 源码  <a href="https://opensource.apple.com/tarballs/CF/" target="_blank" rel="noopener">https://opensource.apple.com/tarballs/CF/</a></li>
+<li>Apple 开发文档 </li>
+<li>郭耀源 的RunLoop底层原理</li>
+<li><a href="https://v.youku.com/v_show/id_XODgxODkzODI0.html" target="_blank" rel="noopener">https://v.youku.com/v_show/id_XODgxODkzODI0.html</a></li>
+<li><a href="http://iphonedevwiki.net/index.php/CFRunLoop" target="_blank" rel="noopener">http://iphonedevwiki.net/index.php/CFRunLoop</a></li>
+<li><a href="https://segmentfault.com/a/1190000002400329" target="_blank" rel="noopener">https://segmentfault.com/a/1190000002400329</a></li>
+<li><a href="https://nshipster.com/inter-process-communication/" target="_blank" rel="noopener">https://nshipster.com/inter-process-communication/</a></li>
+<li><a href="https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html#//apple_ref/doc/uid/10000057i-CH16-SW23" target="_blank" rel="noopener">https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Multithreading/RunLoopManagement/RunLoopManagement.html#//apple_ref/doc/uid/10000057i-CH16-SW23</a></li>
+<li><a href="https://blog.ibireme.com/2015/05/18/runloop/#more-41710" target="_blank" rel="noopener">https://blog.ibireme.com/2015/05/18/runloop/#more-41710</a></li>
+</ul>
+
+      
+
+      
+        <div class="page-reward">
+          <a href="javascript:;" class="page-reward-btn tooltip-top">
+            <div class="tooltip tooltip-east">
+            <span class="tooltip-item">
+              赏
+            </span>
+            <span class="tooltip-content">
+              <span class="tooltip-text">
+                <span class="tooltip-inner">
+                  <p class="reward-p"><i class="icon icon-quo-left"></i>谢谢你请我吃糖果<i class="icon icon-quo-right"></i></p>
+                  <div class="reward-box">
+                    
+                    
+                  </div>
+                </span>
+              </span>
+            </span>
+          </div>
+          </a>
         </div>
-        <div class="clearfix"></div>
-    </header>
+      
+    </div>
+    <div class="article-info article-info-index">
+      
+      
+      
+
+      
+
+      
+        
+<div class="share-btn share-icons tooltip-left">
+  <div class="tooltip tooltip-east">
+    <span class="tooltip-item">
+      <a href="javascript:;" class="share-sns share-outer">
+        <i class="icon icon-share"></i>
+      </a>
+    </span>
+    <span class="tooltip-content">
+      <div class="share-wrap">
+        <div class="share-icons">
+          <a class="weibo share-sns" href="javascript:;" data-type="weibo">
+            <i class="icon icon-weibo"></i>
+          </a>
+          <a class="weixin share-sns wxFab" href="javascript:;" data-type="weixin">
+            <i class="icon icon-weixin"></i>
+          </a>
+          <a class="qq share-sns" href="javascript:;" data-type="qq">
+            <i class="icon icon-qq"></i>
+          </a>
+          <a class="douban share-sns" href="javascript:;" data-type="douban">
+            <i class="icon icon-douban"></i>
+          </a>
+          <a class="qzone share-sns" href="javascript:;" data-type="qzone">
+            <i class="icon icon-qzone"></i>
+          </a>
+          <a class="facebook share-sns" href="javascript:;" data-type="facebook">
+            <i class="icon icon-facebook"></i>
+          </a>
+          <a class="twitter share-sns" href="javascript:;" data-type="twitter">
+            <i class="icon icon-twitter"></i>
+          </a>
+          <a class="google share-sns" href="javascript:;" data-type="google">
+            <i class="icon icon-google"></i>
+          </a>
+        </div>
+      </div>
+    </span>
+  </div>
+</div>
+
+<div class="page-modal wx-share js-wx-box">
+    <a class="close js-modal-close" href="javascript:;"><i class="icon icon-close"></i></a>
+    <p>扫一扫，分享到微信</p>
+    <div class="wx-qrcode">
+      <img src="//pan.baidu.com/share/qrcode?url=http://yoursite.com/2020/12/27/%E6%B7%B1%E5%85%A5%E7%90%86%E8%A7%A3RunLoop%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86/" alt="微信分享二维码">
+    </div>
+</div>
+
+<div class="mask js-mask"></div>
+      
+      <div class="clearfix"></div>
+    </div>
   </div>
 </article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2020/05/16/commonDefine/" class="archive-article-date">
-  	<time datetime="2020-05-16T13:30:36.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2020-05-16</time>
-</a>
+<nav id="article-nav">
+  
+  
+    <a href="/2020/05/16/commonDefine/" id="article-nav-older" class="article-nav-link-wrap">
+      <div class="article-nav-title">常用的宏</div>
+      <i class="icon-circle-right"></i>
+    </a>
+  
+</nav>
+
+
+<aside class="wrap-side-operation">
+    <div class="mod-side-operation">
+        
+        <div class="jump-container" id="js-jump-container" style="display:none;">
+            <a href="javascript:void(0)" class="mod-side-operation__jump-to-top">
+                <i class="icon-font icon-back"></i>
+            </a>
+            <div id="js-jump-plan-container" class="jump-plan-container" style="top: -11px;">
+                <i class="icon-font icon-plane jump-plane"></i>
+            </div>
         </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2020/05/16/commonDefine/">常用的宏</a>
-    </h1>
-  
-
-        <div class="article-info info-on-right">
-          
-	<div class="article-tag tagcloud">
-		<i class="icon-price-tags icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">iOS</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color2">C</a>
-        		</li>
-      		 
-        		<li class="article-tag-list-item">
-        			<a href="javascript:void(0)" class="js-tag article-tag-list-link color4">C++</a>
-        		</li>
-      		
-		</ul>
-	</div>
-
-          
-	<div class="article-category tagcloud">
-		<i class="icon-book icon"></i>
-		<ul class="article-tag-list">
-			 
-        		<li class="article-tag-list-item">
-        			<a href="/categories/默认分类//" class="article-tag-list-link color5">默认分类</a>
-        		</li>
-      		
-		</ul>
-	</div>
+        
+        
+    </div>
+</aside>
 
 
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
+
   
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2020/05/16/Mac%E4%B8%8B%E4%BD%BF%E7%94%A8hexo%E6%90%AD%E5%BB%BAblog/" class="archive-article-date">
-  	<time datetime="2020-05-16T07:24:11.000Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2020-05-16</time>
-</a>
-        </div>
-    	 
   
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2020/05/16/Mac%E4%B8%8B%E4%BD%BF%E7%94%A8hexo%E6%90%AD%E5%BB%BAblog/">Mac下使用hexo搭建blog</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-    
-    
-    <article class="archive-article archive-type-post">
-  <div class="archive-article-inner">
-    <header class="archive-article-header">
-      	<div class="article-meta">
-	      	<a href="/2020/05/15/hello-world/" class="archive-article-date">
-  	<time datetime="2020-05-14T16:44:20.763Z" itemprop="datePublished"><i class="icon-calendar icon"></i>2020-05-15</time>
-</a>
-        </div>
-    	 
-  
-    <h1 itemprop="name">
-      <a class="archive-article-title" href="/2020/05/15/hello-world/">Hello World</a>
-    </h1>
   
 
-        <div class="article-info info-on-right">
-          
-          
-
-        </div>
-        <div class="clearfix"></div>
-    </header>
-  </div>
-</article>
-  
-  
-    </div></section>
   
 
-    
+  
 
 
           </div>
@@ -324,8 +381,8 @@
 	var yiliaConfig = {
 		mathjax: true,
 		isHome: false,
-		isPost: false,
-		isArchive: true,
+		isPost: true,
+		isArchive: false,
 		isTag: false,
 		isCategory: false,
 		open_in_new: true,
